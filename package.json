@@ -1,0 +1,34 @@
+{
+  "name": "graven",
+  "version": "1.0.0",
+  "description": "Synchronizes software dependency metadata into a Graph DB",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lbovet/graven.git"
+  },
+  "keywords": [
+    "maven",
+    "neo4j",
+    "dependencies",
+    "graph",
+    "db"
+  ],
+  "author": "Laurent Bovet",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lbovet/graven/issues"
+  },
+  "homepage": "https://github.com/lbovet/graven#readme",
+  "dependencies": {
+    "jsonfile": "^2.4.0",
+    "kewkew": "github:cmawhorter/kewkew",
+    "maven": "^4.0.3",
+    "neo4j-driver": "^1.0.4",
+    "node-find-files": "0.0.4",
+    "tempfile": "^1.1.1"
+  }
+}
