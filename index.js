@@ -11,6 +11,8 @@ var argv = require('minimist')(process.argv.slice(2));
 var stateFile = '.graven-state'
 var db = neo4j.driver("bolt://localhost", neo4j.auth.basic("neo4j", "password"))
 
+var count = 0
+
 // Collects all poms modified since last scan
 function collect(state, poms) {
   var ts = new Date(state.timestamp)
@@ -19,15 +21,16 @@ function collect(state, poms) {
   var finder = new Finder({
     rootFolder : rootFolder,
     filterFunction : function (path, stat) {
+        var file = path.substring(rootFolder.length)
         return (stat.mtime > ts) && // only new ones
-        /\.pom$/.test(path) && // only poms
-        (!argv.filter || new RegExp(argv.filter).test(path.substring(rootFolder.length))) && // filtered
-        (argv.snapshots || !(/-SNAPSHOT/.test(path)))// no snapshots
+        /\.pom$/.test(file) && // only poms
+        (!argv.filter || new RegExp(argv.filter).test(file)) && // filtered
+        (argv.snapshots || !(/-SNAPSHOT/.test(file)))// no snapshots
     }
   })
   finder.on('match', function(path, stat) {
     var modified = stat.mtime.getTime()
-    poms.push({file:path.replace(/\\/g, '/'), root: rootFolder.replace(/\\/g, '/')})
+    poms.push({file:path.replace(/\\/g, '/').substring(rootFolder.length), root: rootFolder.replace(/\\/g, '/')})
     if(modified > state.timestamp) {
       state.timestamp = modified
     }
@@ -41,16 +44,21 @@ function collect(state, poms) {
 
 // Resolves the dependency list for the given pom and queue it
 function resolve(pom, done) {
-  argv.v && console.log('Resolving dependencies for '+pom.file+' / '+pom.root)
-  var tokens = /(.*)\/(.*)\/(.*)\/(.*)/.exec(pom.file.substring(pom.root.length))
+  argv.v && console.log('Resolving dependencies for '+pom.file+'...' )
+  var tokens = /(.*)\/(.*)\/(.*)\/(.*)/.exec(pom.file)
   var artifact = {
     groupId: tokens[1].replace(/\//g,'.'),
     artifactId: tokens[2],
     version: tokens[3]
   }
   var depFile = temp()
-  maven.create({file: p, quiet:true})
-  .execute('org.apache.maven.plugins:maven-dependency-plugin:2.8:list', { outputFile: depFile, excludeTransitive: true })
+  maven.create({file: pom.root+pom.file, quiet:true})
+  .execute('org.apache.maven.plugins:maven-dependency-plugin:2.8:list',
+    { outputFile: depFile,
+      excludeTransitive: true,
+      'maven.wagon.http.ssl.insecure': true,
+      'maven.wagon.http.ssl.allowall': true
+    })
   .then(function() {
       var lineReader = readline.createInterface({
         input: fs.createReadStream(depFile)
@@ -64,8 +72,8 @@ function resolve(pom, done) {
             version: tokens[4]
           }
           deps.push({
-            from: artifact,
-            to: target,
+            source: artifact,
+            target: target,
             scope: tokens[5]
           })
         }
@@ -80,14 +88,22 @@ function resolve(pom, done) {
   })
 }
 
+var merge =
+  'MERGE (source:Artifact {artifactId:{source}.artifactId, groupId:{source}.groupId, version:{source}.version}) ' +
+  'MERGE (target:Artifact {artifactId:{target}.artifactId, groupId:{target}.groupId, version:{target}.version}) ' +
+  'MERGE (source)-[:DEPENDS_ON{scope: {scope}}]->(target)'
+var session = db.session()
+
 // Writes the dependency list in the graph database
 function push(dep, done) {
-  var session = db.session();
   session
-    .run( "MERGE (a:Artifact {a})", {a: dep.from} )
-    .then( function( result ) {
-      console.log( result.records[0].get("title") + " " + result.records[0].get("name") );
-      session.close();
+    .run(merge, dep)
+    .catch(function(err) {
+      console.error(err)
+      done()
+    })
+    .then(function(result) {
+      count++
       done()
     })
 }
@@ -95,24 +111,23 @@ function push(dep, done) {
 // Initialize the pom queue
 var poms = new Queue(function(job, done) {
   resolve(job.data, done)
-}, {concurrency: 4, destroySuccessfulJobs: true})
+}, {concurrency: argv.p || 8, destroySuccessfulJobs: true})
 
 // Initialize the dep list queue
 var deps = new Queue(function(job, done) {
   push(job.data, done)
-}, {destroySuccessfulJobs: true})
+}, {concurrency: 1, destroySuccessfulJobs: true})
 
 // Start collection of poms
 file.readFile(stateFile, function(err, state) {
-  //collect(state || { timestamp:0}, poms)
+  collect(state || { timestamp:0}, poms)
 })
 
-push({ from:
-   { groupId: 'li.chee.bugtik',
-     artifactId: 'bugtik',
-     version: '1.0.0' },
-  to:
-   { groupId: 'org.springframework.boot',
-     artifactId: 'spring-boot-starter-data-jpa',
-     version: '1.2.6.RELEASE' },
-  scope: 'compile' }, function() {})
+// Show count of pushed items
+var previous = 0;
+setInterval(function() {
+  if(count!=previous) {
+    console.log('Pushed '+count+' dependencies')
+    previous = count
+  }
+}, 2000)
