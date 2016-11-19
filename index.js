@@ -57,7 +57,9 @@ function resolve(pom, done) {
     { outputFile: depFile,
       excludeTransitive: true,
       'maven.wagon.http.ssl.insecure': true,
-      'maven.wagon.http.ssl.allowall': true
+      'maven.wagon.http.ssl.allowall': true,
+      excludeTypes: 'test-jar',
+      excludeScopes: 'test'
     })
   .then(function() {
       var lineReader = readline.createInterface({
@@ -127,7 +129,7 @@ file.readFile(stateFile, function(err, state) {
 var previous = 0;
 setInterval(function() {
   if(count!=previous) {
-    console.log('Pushed '+count+' dependencies')
+    console.log('Pushed '+(count-previous)+' dependencies')
     previous = count
   }
 }, 2000)

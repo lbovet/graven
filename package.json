@@ -27,6 +27,7 @@
     "jsonfile": "^2.4.0",
     "kewkew": "github:cmawhorter/kewkew",
     "maven": "^4.0.3",
+    "minimist": "^1.2.0",
     "neo4j-driver": "^1.0.4",
     "node-find-files": "0.0.4",
     "tempfile": "^1.1.1"
