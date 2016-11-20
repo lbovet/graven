@@ -9,8 +9,7 @@ var fs = require('fs')
 var argv = require('minimist')(process.argv.slice(2));
 
 var stateFile = '.graven-state'
-var db = neo4j.driver("bolt://localhost", neo4j.auth.basic("neo4j", "password"))
-
+var db = neo4j.driver(argv.url || "bolt://localhost", neo4j.auth.basic(argv.user || "neo4j", argv.password || "password"))
 var count = 0
 
 // Collects all poms modified since last scan
@@ -85,7 +84,6 @@ function resolve(pom, done) {
         done()
       })
   }, function(err) {
-    console.log("Error", err)
     done(err)
   })
 }
@@ -113,7 +111,10 @@ function push(dep, done) {
 // Initialize the pom queue
 var poms = new Queue(function(job, done) {
   resolve(job.data, done)
-}, {concurrency: argv.p || 8, destroySuccessfulJobs: true})
+}, {concurrency: argv.p || 8, retryFailedJobs:true, maxJobFailures: 1, destroySuccessfulJobs: true})
+poms.on('error',function(err, a){
+  console.log(err)
+})
 
 // Initialize the dep list queue
 var deps = new Queue(function(job, done) {
