@@ -121,9 +121,11 @@ var deps = new Queue(function(job, done) {
 }, {concurrency: 1, destroySuccessfulJobs: true})
 
 // Start collection of poms
-file.readFile(stateFile, function(err, state) {
-  collect(state || { timestamp:0}, poms)
-})
+if(!argv.noscan) {
+  file.readFile(stateFile, function(err, state) {
+    collect(state || { timestamp:0}, poms)
+  })
+}
 
 // Show count of pushed items
 var previous = 0;
