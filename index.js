@@ -24,7 +24,7 @@ function collect(state, poms) {
         return (stat.mtime > ts) && // only new ones
         /\.pom$/.test(file) && // only poms
         (!argv.filter || new RegExp(argv.filter).test(file)) && // filtered
-        (argv.snapshots || !(/-SNAPSHOT/.test(file)))// no snapshots
+        (argv.snapshots && (/-SNAPSHOT\.pom/.test(file)) || !(/-SNAPSHOT/.test(file)))// no snapshots
     }
   })
   finder.on('match', function(path, stat) {
